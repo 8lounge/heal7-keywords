@@ -1,15 +1,16 @@
 import * as THREE from 'three'
 
 export interface KeywordNode {
-  id: string
+  id: number | string
   name: string
   category: string
   subcategory: string
   weight: number
   connections: number
-  position: [number, number, number]
-  color: string
-  dependencies: string[]
+  position?: [number, number, number]
+  color?: string
+  dependencies: (number | string)[]
+  status: string
 }
 
 // 카테고리별 색상 매핑
@@ -151,7 +152,8 @@ export function generateKeywordNodes(): KeywordNode[] {
         connections,
         position: positions[positionIndex],
         color: categoryColors[group as keyof typeof categoryColors] || '#888888',
-        dependencies
+        dependencies,
+        status: 'active'
       })
 
       positionIndex++

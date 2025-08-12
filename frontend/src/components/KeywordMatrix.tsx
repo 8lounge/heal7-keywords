@@ -10,6 +10,7 @@ import {
   Gauge
 } from 'lucide-react'
 import { generateKeywordNodes, searchKeywords, filterKeywordsByCategory } from '@/utils/keywordGlobeData'
+import KeywordGlobe from './3d/KeywordGlobe'
 
 export default function KeywordMatrix() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -17,6 +18,8 @@ export default function KeywordMatrix() {
   const [isLoading, setIsLoading] = useState(true)
   const [keywords, setKeywords] = useState<any[]>([])
   const [filteredKeywords, setFilteredKeywords] = useState<any[]>([])
+  const [selectedKeyword, setSelectedKeyword] = useState<any>(null)
+  const [isAnimating, setIsAnimating] = useState(true)
   const [matrixStats, setMatrixStats] = useState({
     total_keywords: 442,
     active_keywords: 442,
@@ -68,7 +71,12 @@ export default function KeywordMatrix() {
     setFilteredKeywords(filtered)
   }, [searchTerm, selectedCategory, keywords])
 
-  // 3D 매트릭스 렌더링 (간단한 CSS 3D 버전)
+  // 키워드 클릭 핸들러
+  const handleKeywordClick = (keyword: any) => {
+    setSelectedKeyword(selectedKeyword?.id === keyword.id ? null : keyword)
+  }
+
+  // 3D 지구본 매트릭스 렌더링
   const render3DMatrix = () => {
     if (isLoading) {
       return (
@@ -82,22 +90,13 @@ export default function KeywordMatrix() {
     }
 
     return (
-      <div className="keyword-3d-canvas bg-white/10 backdrop-blur-sm rounded-lg p-8 h-96">
-        <div className="grid grid-cols-6 gap-2 h-full overflow-hidden">
-          {filteredKeywords.slice(0, 72).map((keyword, index) => (
-            <div
-              key={keyword.id}
-              className="bg-white/20 backdrop-blur-sm rounded-md p-2 text-xs text-white text-center hover:bg-white/30 transition-all duration-300 transform hover:scale-105"
-              style={{
-                backgroundColor: keyword.color + '40',
-                animationDelay: `${index * 50}ms`
-              }}
-            >
-              <div className="font-medium truncate">{keyword.name}</div>
-              <div className="text-xs opacity-70">{keyword.category}</div>
-            </div>
-          ))}
-        </div>
+      <div className="keyword-3d-canvas bg-black/20 backdrop-blur-sm rounded-lg overflow-hidden" style={{ height: '600px' }}>
+        <KeywordGlobe
+          keywords={filteredKeywords}
+          onKeywordClick={handleKeywordClick}
+          selectedKeyword={selectedKeyword}
+          isAnimating={isAnimating}
+        />
       </div>
     )
   }

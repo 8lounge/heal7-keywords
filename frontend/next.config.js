@@ -24,6 +24,21 @@ const nextConfig = {
   env: {
     CUSTOM_KEY: 'heal7-keywords-matrix',
     SERVICE_PORT: '8003'
+  },
+  
+  // 보안 헤더 설정 (iframe 허용)
+  async headers() {
+    return [
+      {
+        source: '/(.*)',
+        headers: [
+          {
+            key: 'X-Frame-Options',
+            value: 'ALLOWALL'
+          },
+        ],
+      },
+    ]
   }
 }
 
