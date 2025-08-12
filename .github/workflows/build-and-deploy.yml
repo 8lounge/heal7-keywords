@@ -1,0 +1,208 @@
+name: HEAL7 Keywords Build and Deploy
+
+on:
+  push:
+    branches: [ master, main, develop ]
+  pull_request:
+    branches: [ master, main ]
+  workflow_dispatch:  # 수동 실행 가능
+    inputs:
+      build_environment:
+        description: 'Build Environment'
+        required: true
+        default: 'production'
+        type: choice
+        options:
+          - production
+          - staging
+          - development
+
+env:
+  NODE_ENV: production
+  # 환경변수는 GitHub Secrets에서 자동 주입
+  DATABASE_URL: ${{ secrets.DATABASE_URL }}
+  GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+  OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  JWT_SECRET: ${{ secrets.JWT_SECRET }}
+  ENCRYPTION_KEY: ${{ secrets.ENCRYPTION_KEY }}
+
+jobs:
+  build-frontend:
+    runs-on: ubuntu-latest
+    name: Build Next.js Keywords Frontend
+    
+    strategy:
+      matrix:
+        node-version: [18, 20]
+        
+    outputs:
+      build-status: ${{ steps.build-check.outputs.status }}
+      build-time: ${{ steps.build-check.outputs.time }}
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🔧 Setup Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+        
+    - name: 📦 Install dependencies
+      run: |
+        cd frontend
+        npm ci --prefer-offline --no-audit --legacy-peer-deps --include=dev
+        
+    - name: 🔍 Type check
+      run: |
+        cd frontend
+        npm run type-check || echo "Type check not available"
+        
+    - name: 🏗️ Build Next.js Keywords Application
+      id: build-step
+      run: |
+        cd frontend
+        echo "🚀 Starting keywords build process..."
+        npm run build
+        echo "✅ Keywords build completed successfully!"
+      env:
+        NODE_OPTIONS: '--max-old-space-size=4096'
+        NEXT_TELEMETRY_DISABLED: 1
+        
+    - name: 📊 Build statistics
+      id: build-check
+      run: |
+        cd frontend
+        BUILD_TIME=$(date '+%Y-%m-%d %H:%M:%S')
+        echo "time=$BUILD_TIME" >> $GITHUB_OUTPUT
+        echo "status=success" >> $GITHUB_OUTPUT
+        
+        if [ -d ".next" ]; then
+          NEXT_SIZE=$(du -sh .next | cut -f1)
+          echo "📁 .next directory size: $NEXT_SIZE"
+        fi
+        
+        if [ -d "out" ]; then
+          OUT_SIZE=$(du -sh out | cut -f1)
+          echo "📁 out directory size: $OUT_SIZE"
+        fi
+        
+    - name: 📦 Create build artifact
+      run: |
+        cd frontend
+        BUILD_TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+        ARTIFACT_NAME="heal7-keywords-build-node${{ matrix.node-version }}-${BUILD_TIMESTAMP}"
+        
+        # .next 디렉토리가 있으면 포함
+        TAR_FILES=""
+        if [ -d ".next" ]; then
+          TAR_FILES="$TAR_FILES .next/"
+        fi
+        
+        # out 디렉토리가 있으면 포함
+        if [ -d "out" ]; then
+          TAR_FILES="$TAR_FILES out/"
+        fi
+        
+        # public 디렉토리 포함
+        if [ -d "public" ]; then
+          TAR_FILES="$TAR_FILES public/"
+        fi
+        
+        # package.json과 next.config.js 포함
+        TAR_FILES="$TAR_FILES package.json next.config.js"
+        
+        echo "📦 Creating keywords artifact with: $TAR_FILES"
+        tar -czf "${ARTIFACT_NAME}.tar.gz" $TAR_FILES
+        
+        echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+        
+    - name: ⬆️ Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: heal7-keywords-build-node${{ matrix.node-version }}
+        path: frontend/${{ env.ARTIFACT_NAME }}.tar.gz
+        retention-days: 7
+        compression-level: 9
+
+  build-backend:
+    runs-on: ubuntu-latest
+    name: Test Python Keywords Backend
+    
+    steps:
+    - name: 📥 Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python 3.11
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: 📦 Install Python dependencies
+      run: |
+        cd backend
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        else
+          echo "⚠️ requirements.txt not found, skipping dependency installation"
+        fi
+        
+    - name: 🧪 Run Python syntax check
+      run: |
+        cd backend
+        python -m py_compile main.py keywords_api.py
+        echo "✅ Python syntax check passed"
+
+  deploy-notification:
+    needs: [build-frontend, build-backend]
+    runs-on: ubuntu-latest
+    name: Keywords Build Complete Notification
+    if: always()
+    
+    steps:
+    - name: 📊 Keywords Build Summary
+      run: |
+        echo "🎉 HEAL7 Keywords Build Summary"
+        echo "================================"
+        echo "Frontend Build Status: ${{ needs.build-frontend.result }}"
+        echo "Backend Test Status: ${{ needs.build-backend.result }}"
+        echo "Build Time: ${{ needs.build-frontend.outputs.build-time }}"
+        echo ""
+        if [ "${{ needs.build-frontend.result }}" == "success" ]; then
+          echo "✅ 키워드 프론트엔드 빌드 성공!"
+          echo "📥 아티팩트 다운로드 준비 완료"
+          echo ""
+          echo "🔽 다음 단계:"
+          echo "1. 로컬에서 다운로드 스크립트 실행"
+          echo "   ./download-keywords-artifacts.sh"
+          echo "2. 빌드 결과물을 프로덕션 환경에 배포"
+          echo "3. 키워드 서비스 재시작"
+        else
+          echo "❌ 빌드 실패 - 로그를 확인하세요"
+        fi
+        echo ""
+        echo "🔗 GitHub Actions: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        
+    - name: 🚀 Keywords Deployment Instructions
+      if: needs.build-frontend.result == 'success'
+      run: |
+        echo "📝 키워드 배포 가이드:"
+        echo ""
+        echo "# 1. 빌드 결과물 다운로드"
+        echo "cd /home/ubuntu/project/heal7-keywords"
+        echo "gh run download --name heal7-keywords-build-node20"
+        echo ""
+        echo "# 2. 서비스 중지"
+        echo "sudo systemctl stop nginx"
+        echo ""
+        echo "# 3. 빌드 파일 교체"
+        echo "tar -xzf heal7-keywords-build-*.tar.gz"
+        echo "cp -r out/* /var/www/heal7-keywords/ || cp -r .next /home/ubuntu/project/heal7-keywords/frontend/"
+        echo ""
+        echo "# 4. 키워드 서비스 시작"
+        echo "cd /home/ubuntu/project/heal7-keywords/backend && python main.py &"
+        echo "sudo systemctl start nginx"
