@@ -58,10 +58,10 @@
   }
 }
 
-/* 키워드 매트릭스 전용 스타일 */
+/* 키워드 매트릭스 전용 스타일 (블랙 배경) */
 .keyword-matrix-container {
   min-height: 100vh;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: radial-gradient(ellipse at center, #1a1a1a 0%, #000000 100%);
 }
 
 .keyword-3d-canvas {

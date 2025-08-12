@@ -10,7 +10,24 @@ import {
   Gauge
 } from 'lucide-react'
 import { generateKeywordNodes, searchKeywords, filterKeywordsByCategory } from '@/utils/keywordGlobeData'
-import KeywordGlobe from './3d/KeywordGlobe'
+import dynamic from 'next/dynamic'
+
+// OptimizedKeywordGlobe 동적 로딩 (메모리 최적화)
+const OptimizedKeywordGlobe = dynamic(
+  () => import('./3d/OptimizedKeywordGlobe'),
+  { 
+    ssr: false,
+    loading: () => (
+      <div className="w-full h-full flex items-center justify-center bg-black rounded-lg">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-white mb-2">🌍 3D Globe Matrix 로딩 중...</p>
+          <p className="text-sm text-gray-300">Three.js 엔진 초기화</p>
+        </div>
+      </div>
+    )
+  }
+)
 
 export default function KeywordMatrix() {
   const [searchTerm, setSearchTerm] = useState('')
@@ -90,8 +107,8 @@ export default function KeywordMatrix() {
     }
 
     return (
-      <div className="keyword-3d-canvas bg-black/20 backdrop-blur-sm rounded-lg overflow-hidden" style={{ height: '600px' }}>
-        <KeywordGlobe
+      <div className="keyword-3d-canvas bg-black backdrop-blur-sm rounded-lg overflow-hidden" style={{ height: '600px' }}>
+        <OptimizedKeywordGlobe
           keywords={filteredKeywords}
           onKeywordClick={handleKeywordClick}
           selectedKeyword={selectedKeyword}

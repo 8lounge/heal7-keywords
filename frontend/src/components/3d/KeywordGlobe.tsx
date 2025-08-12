@@ -202,7 +202,7 @@ function Scene({ keywords, onKeywordClick, selectedKeyword, isAnimating }: Keywo
           connected.position ? (
             <ConnectionLine
               key={`${selectedKeyword.id}-${connected.id}`}
-              start={selectedKeyword.position!}
+              start={selectedKeyword.position}
               end={connected.position}
               animated={isAnimating}
             />
@@ -229,7 +229,7 @@ export default function KeywordGlobe({ keywords, onKeywordClick, selectedKeyword
     <div className="w-full h-full">
       <Canvas
         camera={{ position: [0, 0, 8], fov: 60 }}
-        style={{ background: 'linear-gradient(135deg, #000428 0%, #004e92 100%)' }}
+        style={{ background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' }}
       >
         <Scene
           keywords={keywords}
