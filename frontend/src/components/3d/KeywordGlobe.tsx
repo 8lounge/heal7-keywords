@@ -202,7 +202,7 @@ function Scene({ keywords, onKeywordClick, selectedKeyword, isAnimating }: Keywo
           connected.position ? (
             <ConnectionLine
               key={`${selectedKeyword.id}-${connected.id}`}
-              start={selectedKeyword.position}
+              start={selectedKeyword.position!}
               end={connected.position}
               animated={isAnimating}
             />
