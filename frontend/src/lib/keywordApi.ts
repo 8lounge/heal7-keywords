@@ -92,7 +92,7 @@ class KeywordApiService {
   }): Promise<KeywordData[]> {
     try {
       // 442개 키워드 전체 조회 API 사용
-      const url = `${this.baseUrl}/admin-api/keywords/all`
+      const url = `${this.baseUrl}/api/keywords/all`
       const response = await this.fetchWithTimeout(url)
 
       if (!response.ok) {
@@ -147,8 +147,8 @@ class KeywordApiService {
     try {
       // 통계와 전체 키워드 데이터를 병렬로 가져오기
       const [statsResponse, keywordsResponse] = await Promise.all([
-        this.fetchWithTimeout(`${this.baseUrl}/admin-api/keywords/stats`),
-        this.fetchWithTimeout(`${this.baseUrl}/admin-api/keywords/all`)
+        this.fetchWithTimeout(`${this.baseUrl}/api/keywords/stats`),
+        this.fetchWithTimeout(`${this.baseUrl}/api/keywords/all`)
       ])
 
       if (!statsResponse.ok || !keywordsResponse.ok) {
@@ -202,7 +202,7 @@ class KeywordApiService {
     }>
   }> {
     try {
-      const url = `${this.baseUrl}/admin-api/keywords/dependencies/${keywordId}`
+      const url = `${this.baseUrl}/api/keywords/dependencies/${keywordId}`
       const response = await this.fetchWithTimeout(url)
 
       if (!response.ok) {
@@ -230,7 +230,7 @@ class KeywordApiService {
     timestamp: string
   }> {
     try {
-      const url = `${this.baseUrl}/admin-api/keywords/health`
+      const url = `${this.baseUrl}/api/keywords/health`
       const response = await this.fetchWithTimeout(url)
 
       if (!response.ok) {
@@ -301,7 +301,7 @@ class KeywordApiService {
    */
   async createKeyword(keywordData: KeywordCreateData): Promise<KeywordData> {
     try {
-      const url = `${this.baseUrl}/admin-api/keywords/`
+      const url = `${this.baseUrl}/api/keywords/`
       const response = await this.fetchWithTimeout(url, {
         method: 'POST',
         body: JSON.stringify(keywordData)
@@ -323,7 +323,7 @@ class KeywordApiService {
    */
   async updateKeyword(keywordId: number, keywordData: KeywordUpdateData): Promise<KeywordData> {
     try {
-      const url = `${this.baseUrl}/admin-api/keywords/${keywordId}`
+      const url = `${this.baseUrl}/api/keywords/${keywordId}`
       const response = await this.fetchWithTimeout(url, {
         method: 'PUT',
         body: JSON.stringify(keywordData)
@@ -345,7 +345,7 @@ class KeywordApiService {
    */
   async deleteKeyword(keywordId: number): Promise<{ message: string }> {
     try {
-      const url = `${this.baseUrl}/admin-api/keywords/${keywordId}`
+      const url = `${this.baseUrl}/api/keywords/${keywordId}`
       const response = await this.fetchWithTimeout(url, {
         method: 'DELETE'
       })
@@ -366,7 +366,7 @@ class KeywordApiService {
    */
   async getKeyword(keywordId: number): Promise<KeywordData> {
     try {
-      const url = `${this.baseUrl}/admin-api/keywords/${keywordId}`
+      const url = `${this.baseUrl}/api/keywords/${keywordId}`
       const response = await this.fetchWithTimeout(url)
 
       if (!response.ok) {
@@ -417,7 +417,7 @@ class KeywordApiService {
    */
   async searchKeywords(query: string): Promise<KeywordData[]> {
     try {
-      const url = `${this.baseUrl}/admin-api/keywords/search`
+      const url = `${this.baseUrl}/api/keywords/search`
       const response = await this.fetchWithTimeout(url, {
         method: 'POST',
         body: JSON.stringify({ query })
@@ -451,7 +451,7 @@ class KeywordApiService {
    */
   async getKeywordStats(): Promise<KeywordStats> {
     try {
-      const url = `${this.baseUrl}/admin-api/keywords/stats`
+      const url = `${this.baseUrl}/api/keywords/stats`
       const response = await this.fetchWithTimeout(url)
 
       if (!response.ok) {

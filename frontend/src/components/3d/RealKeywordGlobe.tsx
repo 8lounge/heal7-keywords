@@ -14,6 +14,16 @@ interface RealKeywordGlobeProps {
   isAnimating?: boolean
 }
 
+// 애니메이션 상태 타입
+type ViewMode = '3d' | '2d'
+
+interface AnimationState {
+  viewMode: ViewMode
+  isTransitioning: boolean
+  focusedKeyword: KeywordData | null
+  originalPositions: Map<string, THREE.Vector3>
+}
+
 export default function RealKeywordGlobe({
   keywords = [],
   onKeywordClick,
@@ -28,6 +38,13 @@ export default function RealKeywordGlobe({
   const [error, setError] = useState<string | null>(null)
   const [keywordData, setKeywordData] = useState<KeywordData[]>([])
   const [selectedKeywordState, setSelectedKeywordState] = useState<KeywordData | null>(null)
+  const [animationState, setAnimationState] = useState<AnimationState>({
+    viewMode: '3d',
+    isTransitioning: false,
+    focusedKeyword: null,
+    originalPositions: new Map()
+  })
+  const animationTweensRef = useRef<any[]>([])
 
   // Three.js 초기화
   const initThreeJS = useCallback(async () => {
@@ -177,6 +194,9 @@ export default function RealKeywordGlobe({
     )
     existingNodes.forEach((node: any) => scene.remove(node))
 
+    // 원본 위치 저장용 Map 초기화
+    const originalPositions = new Map<string, THREE.Vector3>()
+
     // Golden Spiral 알고리즘으로 키워드 배치
     const goldenAngle = Math.PI * (3 - Math.sqrt(5))
     
@@ -211,12 +231,16 @@ export default function RealKeywordGlobe({
       node.position.copy(position)
       glow.position.copy(position)
       
-      // 키워드 데이터 저장
+      // 원본 위치 저장
+      originalPositions.set(keyword.id, position.clone())
+      
+      // 키워드 데이터 저장 (연결 관계 추가)
       node.userData = {
         type: 'keyword',
         keyword: keyword,
         originalColor: keyword.color || '#3B82F6',
-        glow: glow
+        glow: glow,
+        connections: getKeywordConnections(keyword, keywordList) // 연결 관계 계산
       }
 
       scene.add(node)
@@ -252,12 +276,299 @@ export default function RealKeywordGlobe({
       }
     })
 
+    // 원본 위치 상태 업데이트
+    setAnimationState(prev => ({
+      ...prev,
+      originalPositions
+    }))
+
     console.log(`✅ ${keywordList.length}개 키워드를 3D 지구본에 배치 완료`)
+  }, [])
+
+  // 키워드 연결 관계 계산 함수
+  const getKeywordConnections = useCallback((keyword: KeywordData, keywordList: KeywordData[]) => {
+    // 같은 카테고리나 서브카테고리의 키워드들을 연결로 간주
+    return keywordList.filter(k => 
+      k.id !== keyword.id && 
+      (k.category === keyword.category || k.subcategory === keyword.subcategory)
+    ).slice(0, 8) // 최대 8개 연결로 제한
+  }, [])
+
+  // 원자-전자 2D 관계도 전환 함수
+  const transitionTo2D = useCallback((centerKeyword: KeywordData, centerNode: any, scene: any, camera: any, controls: any) => {
+    if (animationState.isTransitioning) return
+    
+    console.log(`🔄 원자-전자 2D 관계도 전환 시작: ${centerKeyword.name}`)
+    
+    setAnimationState(prev => ({ 
+      ...prev, 
+      isTransitioning: true, 
+      viewMode: '2d', 
+      focusedKeyword: centerKeyword 
+    }))
+    
+    // 기존 애니메이션 정리
+    animationTweensRef.current.forEach(tween => {
+      if (tween && tween.kill) tween.kill()
+    })
+    animationTweensRef.current = []
+    
+    // 연결된 키워드들 찾기
+    const connectedKeywords = centerNode.userData.connections || []
+    const allKeywordNodes = scene.children.filter((child: any) => 
+      child.userData && child.userData.type === 'keyword'
+    )
+    
+    // 레이아웃 중심점
+    const layoutCenter = new THREE.Vector3(0, 0, 0)
+    
+    // 1. 중심 키워드를 (0,0,0)으로 이동
+    const centerTween = createPositionTween(centerNode, layoutCenter, 1.2)
+    animationTweensRef.current.push(centerTween)
+    
+    // 중심 키워드 색상 변경 (밝은 오렌지)
+    const centerColorTween = createColorTween(centerNode, 0xff6b35, 1.0)
+    animationTweensRef.current.push(centerColorTween)
+    
+    // 2. 연결된 키워드들을 방사형 배치
+    if (connectedKeywords.length > 0) {
+      const baseRadius = 3.5
+      const radiusIncrement = Math.max(0.5, connectedKeywords.length * 0.1)
+      const circleRadius = baseRadius + radiusIncrement
+      const angleIncrement = (Math.PI * 2) / connectedKeywords.length
+      
+      connectedKeywords.forEach((keyword: KeywordData, index: number) => {
+        const connectedNode = allKeywordNodes.find((node: any) => 
+          node.userData.keyword.id === keyword.id
+        )
+        
+        if (connectedNode) {
+          const angle = angleIncrement * index
+          const newPosition = new THREE.Vector3(
+            circleRadius * Math.cos(angle),
+            circleRadius * Math.sin(angle),
+            0 // 2D 평면
+          )
+          
+          const positionTween = createPositionTween(connectedNode, newPosition, 1.2, 0.1 * index)
+          const colorTween = createColorTween(connectedNode, 0x3b82f6, 1.0, 0.1 * index) // 파란색
+          
+          animationTweensRef.current.push(positionTween, colorTween)
+        }
+      })
+      
+      console.log(`📐 방사형 레이아웃: ${connectedKeywords.length}개 키워드, 반지름 ${circleRadius}`)
+    }
+    
+    // 3. 연결되지 않은 키워드들은 뒤로 이동 및 투명도 조정
+    allKeywordNodes.forEach((node: any) => {
+      const isCenter = node.userData.keyword.id === centerKeyword.id
+      const isConnected = connectedKeywords.some((k: KeywordData) => k.id === node.userData.keyword.id)
+      
+      if (!isCenter && !isConnected) {
+        const hideTween = createPositionTween(node, new THREE.Vector3(
+          node.position.x * 0.3,
+          node.position.y * 0.3, 
+          node.position.z - 5
+        ), 1.0, 0.2)
+        const fadeOut = createOpacityTween(node, 0.1, 1.0, 0.2)
+        
+        animationTweensRef.current.push(hideTween, fadeOut)
+      }
+    })
+    
+    // 4. 카메라 프레이밍
+    const numConnected = connectedKeywords.length
+    const optimalDistance = numConnected > 10 ? 12 : numConnected > 5 ? 10 : 8
+    const newCameraPos = new THREE.Vector3(0.2, 0.1, optimalDistance)
+    
+    const cameraTween = createPositionTween(camera, newCameraPos, 1.5)
+    const targetTween = createPositionTween(controls.target, layoutCenter, 1.5)
+    
+    animationTweensRef.current.push(cameraTween, targetTween)
+    
+    // 5. 애니메이션 완료 후 상태 업데이트
+    setTimeout(() => {
+      setAnimationState(prev => ({ ...prev, isTransitioning: false }))
+      console.log(`✅ 2D 관계도 전환 완료`)
+    }, 1500)
+    
+  }, [animationState.isTransitioning])
+  
+  // 3D 뷰로 복귀 함수
+  const transitionTo3D = useCallback((scene: any, camera: any, controls: any) => {
+    if (animationState.isTransitioning) return
+    
+    console.log('🌍 3D Globe 뷰로 복귀 시작')
+    
+    setAnimationState(prev => ({ 
+      ...prev, 
+      isTransitioning: true, 
+      viewMode: '3d', 
+      focusedKeyword: null 
+    }))
+    
+    // 기존 애니메이션 정리
+    animationTweensRef.current.forEach(tween => {
+      if (tween && tween.kill) tween.kill()
+    })
+    animationTweensRef.current = []
+    
+    const allKeywordNodes = scene.children.filter((child: any) => 
+      child.userData && child.userData.type === 'keyword'
+    )
+    
+    // 모든 키워드를 원래 위치로 복귀
+    allKeywordNodes.forEach((node: any) => {
+      const keyword = node.userData.keyword
+      const originalPosition = animationState.originalPositions.get(keyword.id)
+      const originalColor = parseInt(node.userData.originalColor.replace('#', '0x'))
+      
+      if (originalPosition) {
+        const positionTween = createPositionTween(node, originalPosition, 1.2)
+        const colorTween = createColorTween(node, originalColor, 1.0)
+        const opacityTween = createOpacityTween(node, 0.9, 1.0)
+        
+        animationTweensRef.current.push(positionTween, colorTween, opacityTween)
+      }
+    })
+    
+    // 카메라를 원래 위치로 복귀
+    const originalCameraPos = new THREE.Vector3(0, 0, 8)
+    const cameraTween = createPositionTween(camera, originalCameraPos, 1.5)
+    const targetTween = createPositionTween(controls.target, new THREE.Vector3(0, 0, 0), 1.5)
+    
+    animationTweensRef.current.push(cameraTween, targetTween)
+    
+    // 애니메이션 완료 후 상태 업데이트
+    setTimeout(() => {
+      setAnimationState(prev => ({ ...prev, isTransitioning: false }))
+      console.log('✅ 3D Globe 복귀 완료')
+    }, 1500)
+    
+  }, [animationState.isTransitioning, animationState.originalPositions])
+  
+  // 위치 애니메이션 생성 헬퍼
+  const createPositionTween = useCallback((object: any, targetPosition: THREE.Vector3, duration: number, delay: number = 0) => {
+    let startTime = Date.now() + delay * 1000
+    let completed = false
+    
+    const startPosition = object.position.clone()
+    
+    const tween = {
+      update: () => {
+        if (completed) return true
+        
+        const now = Date.now()
+        if (now < startTime) return false
+        
+        const elapsed = (now - startTime) / 1000
+        const progress = Math.min(elapsed / duration, 1)
+        
+        // Easing function (power2.out)
+        const easedProgress = 1 - Math.pow(1 - progress, 2)
+        
+        object.position.lerpVectors(startPosition, targetPosition, easedProgress)
+        
+        // Glow 효과도 함께 이동
+        if (object.userData.glow) {
+          object.userData.glow.position.copy(object.position)
+        }
+        
+        if (progress >= 1) {
+          completed = true
+          return true
+        }
+        
+        return false
+      },
+      kill: () => { completed = true }
+    }
+    
+    return tween
+  }, [])
+  
+  // 색상 애니메이션 생성 헬퍼
+  const createColorTween = useCallback((object: any, targetColor: number, duration: number, delay: number = 0) => {
+    let startTime = Date.now() + delay * 1000
+    let completed = false
+    
+    const startColor = object.material.color.clone()
+    const endColor = new THREE.Color(targetColor)
+    
+    const tween = {
+      update: () => {
+        if (completed) return true
+        
+        const now = Date.now()
+        if (now < startTime) return false
+        
+        const elapsed = (now - startTime) / 1000
+        const progress = Math.min(elapsed / duration, 1)
+        
+        const easedProgress = 1 - Math.pow(1 - progress, 2)
+        
+        object.material.color.lerpColors(startColor, endColor, easedProgress)
+        
+        // Glow 색상도 함께 변경
+        if (object.userData.glow) {
+          object.userData.glow.material.color.lerpColors(startColor, endColor, easedProgress)
+        }
+        
+        if (progress >= 1) {
+          completed = true
+          return true
+        }
+        
+        return false
+      },
+      kill: () => { completed = true }
+    }
+    
+    return tween
+  }, [])
+  
+  // 투명도 애니메이션 생성 헬퍼
+  const createOpacityTween = useCallback((object: any, targetOpacity: number, duration: number, delay: number = 0) => {
+    let startTime = Date.now() + delay * 1000
+    let completed = false
+    
+    const startOpacity = object.material.opacity
+    
+    const tween = {
+      update: () => {
+        if (completed) return true
+        
+        const now = Date.now()
+        if (now < startTime) return false
+        
+        const elapsed = (now - startTime) / 1000
+        const progress = Math.min(elapsed / duration, 1)
+        
+        const easedProgress = 1 - Math.pow(1 - progress, 2)
+        
+        object.material.opacity = startOpacity + (targetOpacity - startOpacity) * easedProgress
+        
+        if (object.userData.glow) {
+          object.userData.glow.material.opacity = object.material.opacity * 0.3
+        }
+        
+        if (progress >= 1) {
+          completed = true
+          return true
+        }
+        
+        return false
+      },
+      kill: () => { completed = true }
+    }
+    
+    return tween
   }, [])
 
   // 마우스 클릭 처리
   const handleClick = useCallback((event: MouseEvent) => {
-    if (!sceneRef.current || !THREE) return
+    if (!sceneRef.current || !THREE || animationState.isTransitioning) return
 
     const { scene, camera, renderer } = sceneRef.current
     const rect = renderer.domElement.getBoundingClientRect()
@@ -278,53 +589,56 @@ export default function RealKeywordGlobe({
     
     if (intersects.length > 0) {
       const clickedKeyword = intersects[0].object.userData.keyword
-      const newSelected = selectedKeywordState?.id === clickedKeyword.id ? null : clickedKeyword
-      setSelectedKeywordState(newSelected)
+      const clickedNode = intersects[0].object
+      const { controls } = sceneRef.current
+      
+      // 동일한 키워드 클릭 시 처리
+      if (selectedKeywordState?.id === clickedKeyword.id) {
+        // 2D 뷰에서는 3D로 복귀, 3D 뷰에서는 2D로 전환
+        if (animationState.viewMode === '2d') {
+          transitionTo3D(scene, camera, controls)
+          setSelectedKeywordState(null)
+        } else {
+          transitionTo2D(clickedKeyword, clickedNode, scene, camera, controls)
+        }
+      } else {
+        // 새로운 키워드 선택
+        setSelectedKeywordState(clickedKeyword)
+        
+        // 3D 뷰에서는 2D 관계도로 전환
+        if (animationState.viewMode === '3d') {
+          transitionTo2D(clickedKeyword, clickedNode, scene, camera, controls)
+        }
+      }
       
       // 외부 콜백 호출
       if (onKeywordClick) {
         onKeywordClick(clickedKeyword)
       }
-      
-      // 모든 키워드 하이라이트 초기화
-      keywordNodes.forEach((node: any) => {
-        const originalColor = parseInt(node.userData.originalColor.replace('#', '0x'))
-        node.material.color.setHex(originalColor)
-        node.scale.setScalar(1)
-        if (node.userData.glow) {
-          node.userData.glow.material.color.setHex(originalColor)
-          node.userData.glow.scale.setScalar(1)
-        }
-      })
-      
-      // 클릭된 키워드만 하이라이트
-      if (newSelected) {
-        const clickedNode = intersects[0].object
-        clickedNode.material.color.setHex(0xff6b6b)
-        clickedNode.scale.setScalar(2)
-        if (clickedNode.userData.glow) {
-          clickedNode.userData.glow.material.color.setHex(0xff6b6b)
-          clickedNode.userData.glow.scale.setScalar(2)
-        }
-      }
 
-      console.log('클릭된 키워드:', clickedKeyword.name)
+      console.log('클릭된 키워드:', clickedKeyword.name, '| 뷰 모드:', animationState.viewMode)
     } else {
-      // 빈 공간 클릭 시 선택 해제
-      setSelectedKeywordState(null)
-      
-      // 모든 하이라이트 제거
-      keywordNodes.forEach((node: any) => {
-        const originalColor = parseInt(node.userData.originalColor.replace('#', '0x'))
-        node.material.color.setHex(originalColor)
-        node.scale.setScalar(1)
-        if (node.userData.glow) {
-          node.userData.glow.material.color.setHex(originalColor)
-          node.userData.glow.scale.setScalar(1)
-        }
-      })
+      // 빈 공간 클릭 시 3D로 복귀
+      if (animationState.viewMode === '2d') {
+        const { controls } = sceneRef.current
+        transitionTo3D(scene, camera, controls)
+        setSelectedKeywordState(null)
+      } else {
+        setSelectedKeywordState(null)
+        
+        // 3D에서는 하이라이트 제거
+        keywordNodes.forEach((node: any) => {
+          const originalColor = parseInt(node.userData.originalColor.replace('#', '0x'))
+          node.material.color.setHex(originalColor)
+          node.scale.setScalar(1)
+          if (node.userData.glow) {
+            node.userData.glow.material.color.setHex(originalColor)
+            node.userData.glow.scale.setScalar(1)
+          }
+        })
+      }
     }
-  }, [selectedKeywordState, onKeywordClick])
+  }, [selectedKeywordState, onKeywordClick, animationState, transitionTo2D, transitionTo3D])
 
   // 애니메이션 루프
   const animate = useCallback(() => {
@@ -334,22 +648,32 @@ export default function RealKeywordGlobe({
     
     controls.update()
     
-    // 지구본과 별들 회전
-    const globe = scene.children.find((child: any) => 
-      child.type === 'Mesh' && child.geometry.type === 'SphereGeometry' && child.material.wireframe
-    )
-    if (globe) {
-      globe.rotation.y += 0.002
-    }
+    // 커스텀 애니메이션 업데이트
+    animationTweensRef.current = animationTweensRef.current.filter(tween => {
+      if (tween && tween.update) {
+        return !tween.update() // false를 반환하면 계속 실행, true를 반환하면 완료
+      }
+      return false
+    })
     
-    const stars = scene.children.find((child: any) => child.type === 'Points')
-    if (stars) {
-      stars.rotation.y += 0.0005
+    // 지구본과 별들 회전 (3D 모드에서만)
+    if (animationState.viewMode === '3d') {
+      const globe = scene.children.find((child: any) => 
+        child.type === 'Mesh' && child.geometry.type === 'SphereGeometry' && child.material.wireframe
+      )
+      if (globe) {
+        globe.rotation.y += 0.002
+      }
+      
+      const stars = scene.children.find((child: any) => child.type === 'Points')
+      if (stars) {
+        stars.rotation.y += 0.0005
+      }
     }
 
     renderer.render(scene, camera)
     animationRef.current = requestAnimationFrame(animate)
-  }, [])
+  }, [animationState.viewMode])
 
   // 초기화
   useEffect(() => {
@@ -484,13 +808,25 @@ export default function RealKeywordGlobe({
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-xl text-blue-300">{selectedKeywordState.name}</h3>
             <button 
-              onClick={() => setSelectedKeywordState(null)}
+              onClick={() => {
+                if (animationState.viewMode === '2d' && sceneRef.current) {
+                  const { scene, camera, controls } = sceneRef.current
+                  transitionTo3D(scene, camera, controls)
+                }
+                setSelectedKeywordState(null)
+              }}
               className="text-gray-400 hover:text-white transition-colors"
             >
               ✕
             </button>
           </div>
           <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-gray-400">뷰 모드:</span> 
+              <span className={`font-medium ${animationState.viewMode === '2d' ? 'text-orange-400' : 'text-blue-400'}`}>
+                {animationState.viewMode === '2d' ? '🔬 원자-전자 2D' : '🌍 3D Globe'}
+              </span>
+            </div>
             <div className="flex justify-between">
               <span className="text-gray-400">카테고리:</span> 
               <span className="font-medium">{selectedKeywordState.category} 그룹</span>
@@ -514,6 +850,39 @@ export default function RealKeywordGlobe({
               </span>
             </div>
           </div>
+          
+          {/* 뷰 전환 버튼 */}
+          {!animationState.isTransitioning && (
+            <div className="mt-4 flex gap-2">
+              <button
+                onClick={() => {
+                  if (sceneRef.current) {
+                    const { scene, camera, controls } = sceneRef.current
+                    if (animationState.viewMode === '3d') {
+                      const keywordNodes = scene.children.filter((child: any) => 
+                        child.userData && child.userData.type === 'keyword'
+                      )
+                      const centerNode = keywordNodes.find((node: any) => 
+                        node.userData.keyword.id === selectedKeywordState.id
+                      )
+                      if (centerNode) {
+                        transitionTo2D(selectedKeywordState, centerNode, scene, camera, controls)
+                      }
+                    } else {
+                      transitionTo3D(scene, camera, controls)
+                    }
+                  }
+                }}
+                className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
+                  animationState.viewMode === '2d' 
+                    ? 'bg-blue-600 hover:bg-blue-700 text-white' 
+                    : 'bg-orange-600 hover:bg-orange-700 text-white'
+                }`}
+              >
+                {animationState.viewMode === '2d' ? '🌍 3D Globe' : '🔬 2D 관계도'}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -521,23 +890,50 @@ export default function RealKeywordGlobe({
       <div className="absolute bottom-4 left-4 bg-black/80 backdrop-blur-sm rounded-lg p-4 text-white">
         <div className="space-y-2 text-sm">
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span className="font-medium">3D WebGL Globe 실행 중</span>
+            <div className={`w-2 h-2 rounded-full animate-pulse ${
+              animationState.viewMode === '2d' ? 'bg-orange-400' : 'bg-green-400'
+            }`}></div>
+            <span className="font-medium">
+              {animationState.viewMode === '2d' ? '🔬 원자-전자 2D 관계도' : '🌍 3D WebGL Globe'} 실행 중
+            </span>
           </div>
-          <div>🖱️ <strong>드래그</strong>: 회전</div>
-          <div>🔍 <strong>휠</strong>: 줌</div>
-          <div>👆 <strong>클릭</strong>: 키워드 선택</div>
-          <div>🌍 <strong>자동</strong>: 회전 중</div>
+          {animationState.isTransitioning ? (
+            <div className="text-yellow-300">⏳ <strong>전환 중...</strong></div>
+          ) : (
+            <>
+              <div>🖱️ <strong>드래그</strong>: 회전</div>
+              <div>🔍 <strong>휠</strong>: 줌</div>
+              <div>👆 <strong>클릭</strong>: {animationState.viewMode === '2d' ? '3D 복귀' : '2D 관계도'}</div>
+              {animationState.viewMode === '3d' && <div>🌍 <strong>자동</strong>: 회전 중</div>}
+              {animationState.viewMode === '2d' && animationState.focusedKeyword && (
+                <div>🔬 <strong>중심</strong>: {animationState.focusedKeyword.name}</div>
+              )}
+            </>
+          )}
         </div>
       </div>
 
       {/* 통계 정보 */}
       <div className="absolute bottom-4 right-4 bg-black/80 backdrop-blur-sm rounded-lg p-4 text-white">
         <div className="space-y-1 text-sm">
-          <div className="font-semibold text-blue-300">키워드 매트릭스</div>
+          <div className="font-semibold text-blue-300">
+            {animationState.viewMode === '2d' ? '원자-전자 관계도' : '키워드 매트릭스'}
+          </div>
           <div>{keywordData.length}개 키워드 로드됨</div>
-          <div>Golden Spiral 알고리즘 배치</div>
-          <div>실시간 3D 렌더링</div>
+          {animationState.viewMode === '2d' ? (
+            <>
+              <div>방사형 2D 레이아웃</div>
+              <div>중심-종속 관계 표시</div>
+              {animationState.focusedKeyword && (
+                <div>연결: {getKeywordConnections(animationState.focusedKeyword, keywordData).length}개</div>
+              )}
+            </>
+          ) : (
+            <>
+              <div>Golden Spiral 알고리즘 배치</div>
+              <div>실시간 3D 렌더링</div>
+            </>
+          )}
         </div>
       </div>
     </div>
