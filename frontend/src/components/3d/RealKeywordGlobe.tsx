@@ -232,7 +232,7 @@ export default function RealKeywordGlobe({
       glow.position.copy(position)
       
       // 원본 위치 저장
-      originalPositions.set(keyword.id, position.clone())
+      originalPositions.set(keyword.id.toString(), position.clone())
       
       // 키워드 데이터 저장 (연결 관계 추가)
       node.userData = {
@@ -421,7 +421,7 @@ export default function RealKeywordGlobe({
     // 모든 키워드를 원래 위치로 복귀
     allKeywordNodes.forEach((node: any) => {
       const keyword = node.userData.keyword
-      const originalPosition = animationState.originalPositions.get(keyword.id)
+      const originalPosition = animationState.originalPositions.get(keyword.id.toString())
       const originalColor = parseInt(node.userData.originalColor.replace('#', '0x'))
       
       if (originalPosition) {
