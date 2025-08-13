@@ -1,8 +1,7 @@
 'use client'
 
 import React, { useState, useEffect, useRef } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
+// UI components temporarily disabled for build fix
 import { Activity, Cpu, MemoryStick, Timer, Gauge } from 'lucide-react'
 
 interface PerformanceMetrics {
@@ -161,17 +160,17 @@ export default function PerformanceMonitor({
   }
 
   return (
-    <Card className={`${getPositionClasses()} w-80 bg-black/95 text-white border-gray-700 backdrop-blur-sm`}>
-      <CardHeader className="pb-3">
-        <CardTitle className="text-sm font-medium flex items-center gap-2">
+    <div className={`${getPositionClasses()} w-80 bg-black/95 text-white border-gray-700 backdrop-blur-sm`}>
+      <div className="pb-3">
+        <h3 className="text-sm font-medium flex items-center gap-2">
           <Gauge className="h-4 w-4 text-green-400" />
           성능 모니터
-          <Badge variant="secondary" className={`${performanceGrade.color} text-white text-xs`}>
+          <span className={`${performanceGrade.color} text-white text-xs px-2 py-1 rounded`}>
             {performanceGrade.grade}급 {performanceGrade.text}
-          </Badge>
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3">
+          </span>
+        </h3>
+      </div>
+      <div className="space-y-3">
         {/* FPS & 렌더링 성능 */}
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-gray-800/50 p-2 rounded">
@@ -265,7 +264,7 @@ export default function PerformanceMonitor({
             <div className="text-green-300">✓ 메모리 최적화</div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   )
 }
