@@ -195,7 +195,7 @@ export default function RealKeywordGlobe({
     existingNodes.forEach((node: any) => scene.remove(node))
 
     // 원본 위치 저장용 Map 초기화
-    const originalPositions = new Map<string, THREE.Vector3>()
+    const originalPositions = new Map<string, any>()
 
     // Golden Spiral 알고리즘으로 키워드 배치
     const goldenAngle = Math.PI * (3 - Math.sqrt(5))
@@ -449,7 +449,7 @@ export default function RealKeywordGlobe({
   }, [animationState.isTransitioning, animationState.originalPositions])
   
   // 위치 애니메이션 생성 헬퍼
-  const createPositionTween = useCallback((object: any, targetPosition: THREE.Vector3, duration: number, delay: number = 0) => {
+  const createPositionTween = useCallback((object: any, targetPosition: any, duration: number, delay: number = 0) => {
     let startTime = Date.now() + delay * 1000
     let completed = false
     
