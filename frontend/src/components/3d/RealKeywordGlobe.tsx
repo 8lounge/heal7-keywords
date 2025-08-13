@@ -21,7 +21,7 @@ interface AnimationState {
   viewMode: ViewMode
   isTransitioning: boolean
   focusedKeyword: KeywordData | null
-  originalPositions: Map<string, THREE.Vector3>
+  originalPositions: Map<string, any>
 }
 
 export default function RealKeywordGlobe({
