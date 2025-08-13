@@ -12,17 +12,20 @@ import {
 import { generateKeywordNodes, searchKeywords, filterKeywordsByCategory } from '@/utils/keywordGlobeData'
 import dynamic from 'next/dynamic'
 
-// OptimizedKeywordGlobe 동적 로딩 (메모리 최적화)
-const OptimizedKeywordGlobe = dynamic(
-  () => import('./3d/OptimizedKeywordGlobe'),
+// RealKeywordGlobe 동적 로딩 (메모리 최적화)
+const RealKeywordGlobe = dynamic(
+  () => import('./3d/RealKeywordGlobe'),
   { 
     ssr: false,
     loading: () => (
       <div className="w-full h-full flex items-center justify-center bg-black rounded-lg">
         <div className="text-center">
-          <div className="w-16 h-16 border-4 border-blue-500 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white mb-2">🌍 3D Globe Matrix 로딩 중...</p>
-          <p className="text-sm text-gray-300">Three.js 엔진 초기화</p>
+          <div className="w-20 h-20 relative mx-auto mb-6">
+            <div className="w-full h-full border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+            <div className="absolute inset-2 border-4 border-purple-500 border-b-transparent rounded-full animate-spin"></div>
+          </div>
+          <p className="text-white mb-2">🌍 진짜 3D 지구본 생성 중...</p>
+          <p className="text-sm text-gray-300">Three.js WebGL + 442개 키워드</p>
         </div>
       </div>
     )
@@ -108,7 +111,7 @@ export default function KeywordMatrix() {
 
     return (
       <div className="keyword-3d-canvas bg-black backdrop-blur-sm rounded-lg overflow-hidden" style={{ height: '600px' }}>
-        <OptimizedKeywordGlobe
+        <RealKeywordGlobe
           keywords={filteredKeywords}
           onKeywordClick={handleKeywordClick}
           selectedKeyword={selectedKeyword}

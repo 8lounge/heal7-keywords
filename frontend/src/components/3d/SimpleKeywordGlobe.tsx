@@ -1,7 +1,11 @@
 'use client'
 
-import React, { useEffect, useRef, useState } from 'react'
+import React, { useEffect, useRef, useCallback, useState } from 'react'
 import { keywordApi, type KeywordData } from '@/lib/keywordApi'
+
+// Three.js 동적 import로 메모리 최적화
+let THREE: any = null
+let OrbitControls: any = null
 
 interface SimpleKeywordGlobeProps {
   keywords?: KeywordData[]
@@ -17,9 +21,13 @@ export default function SimpleKeywordGlobe({
   isAnimating = false
 }: SimpleKeywordGlobeProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const sceneRef = useRef<any>(null)
+  const rendererRef = useRef<any>(null)
+  const animationRef = useRef<number>()
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [keywordData, setKeywordData] = useState<KeywordData[]>([])
+  const [selectedKeywordState, setSelectedKeywordState] = useState<KeywordData | null>(null)
 
   useEffect(() => {
     const loadKeywords = async () => {
